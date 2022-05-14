@@ -4,7 +4,10 @@
 #include "stm32f407xx.h"
 #include "stm32f4xx.h"
 
-/* Clock PLLs for 407 chip */
+
+/******************************************/
+/***		CLOCK PREPROCESSORS 		***/
+/******************************************/
 #if defined (STM32F407xx) || defined (STM32F429xx)
 // Main PLL = N * (source_clock / M) / P
 // HSE = 8 Mhz
@@ -13,48 +16,53 @@
 #define PLL_Q   7
 #define PLL_P   2
 #endif
-
 /* stm32f407 runs at 168Mhz max */
 #if defined (STM32F407xx)
 #define PLL_N   336
 #endif
 
-
-
+/******************************************/
+/***	LOOKUP TABLE GLOBAL PARAMETERS 	***/
+/******************************************/
 #define PI 3.141592
-#define RESO 360
-#define DEC (RESO/360)
-#define PHASESHIFT (RESO/12)
-#define TRISIZE (RESO+RESO/12)
+#define RESO 360						// Sinusoidal resolution(Degree)
+#define DEC (RESO/360)					// Decrement rate if Reso is higher than 360 degree (Finds the multiplier of 360 degrees)
+#define PHASESHIFT (RESO/12)			// Phase Shift for triangular wave
+#define TRISIZE (RESO+RESO/12)			// Triangular wave array size is bit higher than sinus arrays since we have to shift it
 
-double sin_arr[RESO];
-unsigned int MAX_CNT=8400;
+unsigned int MAX_CNT=8400;				// Amplitude is equal to the Timer Period
+double sin_arr[RESO];					// Lookup table arrays
 double tri_arr[TRISIZE];
 uint32_t u[RESO];
 uint32_t v[RESO];
 uint32_t w[RESO];
 
-
-
-volatile int count=0;
+volatile int count=0;					//
 volatile int s=0;
+
+/******************************************/
+/***		FUNCTION PROTOTYPES			***/
+/******************************************/
 
 void create_lookuptable(double M);
 void pwm_init(void);
 void set_sysclk_to_168(void);
 void dma_init(void);
 
+
+/******************************************/
+/***				MAIN				***/
+/******************************************/
 int main(void)
 {
 
-  set_sysclk_to_168();
-  double Mod_Index=1;
+  set_sysclk_to_168();										// Set main clock to 168MHz
+  double Mod_Index=1;										// Modulation Index for lookup table
 
-  create_lookuptable(Mod_Index);
+  create_lookuptable(Mod_Index);							// Creates SVM lookup table
 
-  // dma_init(f);
-  pwm_init();
-  dma_init();
+  pwm_init();												// Initializes Timer1 for PWM Config
+  dma_init();												// Initializes Direct Memory Access
 
   TIM1->CR1  |= (TIM_CR1_CEN_Msk);							// Counter enabled
   TIM1->BDTR |= (TIM_BDTR_MOE_Msk);							// Global output enable for TIM1
@@ -62,24 +70,30 @@ int main(void)
   while(1){}
 }
 
+/******************************************/
+/***		LOOKUP TABLE FUNCTION		***/
+/******************************************/
 void create_lookuptable(double M)
 {
-	int i;
+	int i;																			// Array Indexer
 	for(i=0;i<RESO;i++)
-		sin_arr[i]=(MAX_CNT*0.5*(sin((2*PI*i/DEC)/360)));
+		sin_arr[i]=(MAX_CNT*0.5*(sin((2*PI*i/DEC)/360)));							// Creates Sinus
 
 	for(i=0;i<TRISIZE;i++)
-		tri_arr[i]=0.288*((MAX_CNT*(60-fabs((i/DEC)%(120)-60))/60)-MAX_CNT/2);
+		tri_arr[i]=0.288*((MAX_CNT*(60-fabs((i/DEC)%(120)-60))/60)-MAX_CNT/2);		// Creates Triangular Wave
 
 	for(i=0;i<RESO;i++)
-		u[i]=M*1.154*sin_arr[i]+tri_arr[i+PHASESHIFT]+MAX_CNT/2;
+		u[i]=M*1.154*sin_arr[i]+tri_arr[i+PHASESHIFT]+MAX_CNT/2;					// Creates SVM waveform (U-Phase)
 
 	for(i=0;i<RESO;i++)
-		{if(i<241) v[i+(RESO/3)]=u[i]; else v[i-(2*RESO/3)+1]=u[i];}
+		{if(i<241) v[i+(RESO/3)]=u[i]; else v[i-(2*RESO/3)+1]=u[i];}				// Creates V phase by phase shifting
 	for(i=0;i<RESO;i++)
-		{if(i<121) w[i+(2*RESO/3)]=u[i]; else w[i-(RESO/3)+1]=u[i];}
+		{if(i<121) w[i+(2*RESO/3)]=u[i]; else w[i-(RESO/3)+1]=u[i];}				// Creates W phase by phase shifting
 }
 
+/******************************************/
+/***			TIMER1 INIT				***/
+/******************************************/
 void pwm_init(void)
 {
 	RCC->AHB1ENR |= (1<<4 | 1<<1);								// Enable GPIOB and GPIOE Clock
@@ -129,9 +143,9 @@ void pwm_init(void)
 	TIM1->PSC  = 0; 											// 168MHz 5.95nS
 	TIM1->CNT  = 0;												// Reset Current Counter
 	TIM1->ARR  = 8400;											// Center Mode pit to peak is 50uS
-	TIM1->CCR1 = 0;											// %50 Duty Cycle
-	TIM1->CCR2 = 0;											// %50 Duty Cycle
-	TIM1->CCR3 = 0;											// %50 Duty Cycle
+	TIM1->CCR1 = 0;												// %50 Duty Cycle
+	TIM1->CCR2 = 0;												// %50 Duty Cycle
+	TIM1->CCR3 = 0;												// %50 Duty Cycle
 
 
 	// Update Configuration
@@ -140,13 +154,13 @@ void pwm_init(void)
 	//TIM1->BDTR |= (0b00011010);								// 155nS deadtime
 	//TIM1->BDTR |= (0b00100010);								// 202nS deadtime
 	//TIM1->BDTR |= (0b01000100);								// 404nS deadtime
-	TIM1->BDTR |= (0b10010100);								// 1us deadtime
+	TIM1->BDTR |= (0b10010100);									// 1us deadtime
 	//TIM1->BDTR |= (0b11001010);								// 2uS deadtime
 
-	//TIM1->RCR = 0;												// After 50usx200=10ms ;
+	//TIM1->RCR = 0;											// After 50usx200=10ms ;
 	TIM1->CR2 |= TIM_CR2_CCDS;
-	TIM1->DIER|=(TIM_DIER_UDE|TIM_DIER_CC1DE|TIM_DIER_CC2DE|TIM_DIER_CC3DE);
-	TIM1->DIER|=TIM_DIER_TDE;
+	TIM1->DIER|=(TIM_DIER_UDE|TIM_DIER_CC1DE|TIM_DIER_CC2DE|TIM_DIER_CC3DE);	// Enables all DMA Access
+	TIM1->DIER|=TIM_DIER_TDE;													// Enable Trigger DMA
 
 
 	// Enable Outputs
@@ -154,6 +168,11 @@ void pwm_init(void)
 	TIM1->CCER |= (TIM_CCER_CC2E | TIM_CCER_CC2NE);				// CC CH2 and CH2n enabled for output
 	TIM1->CCER |= (TIM_CCER_CC3E | TIM_CCER_CC3NE);				// CC CH3 and CH3n enabled for output
 }
+
+/******************************************/
+/***			CLOCK INIT				***/
+/******************************************/
+
 
 void set_sysclk_to_168(void)
 {
@@ -237,7 +256,9 @@ void set_sysclk_to_168(void)
 	// update SystemCoreClock variable
 	SystemCoreClock = 168000000;
 }
-
+/******************************************/
+/***			DMA INIT				***/
+/******************************************/
 void dma_init(void)
 {
 	  RCC->AHB1ENR |= (1 << 22);									// Enable DMA2 clock

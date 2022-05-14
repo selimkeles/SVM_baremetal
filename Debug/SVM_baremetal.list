@@ -1403,15 +1403,15 @@ void pwm_init(void)
  8000f3e:	4b21      	ldr	r3, [pc, #132]	; (8000fc4 <pwm_init+0x1cc>)
  8000f40:	f242 02d0 	movw	r2, #8400	; 0x20d0
  8000f44:	62da      	str	r2, [r3, #44]	; 0x2c
-	TIM1->CCR1 = 0;											// %50 Duty Cycle
+	TIM1->CCR1 = 0;												// %50 Duty Cycle
  8000f46:	4b1f      	ldr	r3, [pc, #124]	; (8000fc4 <pwm_init+0x1cc>)
  8000f48:	2200      	movs	r2, #0
  8000f4a:	635a      	str	r2, [r3, #52]	; 0x34
-	TIM1->CCR2 = 0;											// %50 Duty Cycle
+	TIM1->CCR2 = 0;												// %50 Duty Cycle
  8000f4c:	4b1d      	ldr	r3, [pc, #116]	; (8000fc4 <pwm_init+0x1cc>)
  8000f4e:	2200      	movs	r2, #0
  8000f50:	639a      	str	r2, [r3, #56]	; 0x38
-	TIM1->CCR3 = 0;											// %50 Duty Cycle
+	TIM1->CCR3 = 0;												// %50 Duty Cycle
  8000f52:	4b1c      	ldr	r3, [pc, #112]	; (8000fc4 <pwm_init+0x1cc>)
  8000f54:	2200      	movs	r2, #0
  8000f56:	63da      	str	r2, [r3, #60]	; 0x3c
@@ -1420,7 +1420,7 @@ void pwm_init(void)
 	//TIM1->BDTR |= (0b00011010);								// 155nS deadtime
 	//TIM1->BDTR |= (0b00100010);								// 202nS deadtime
 	//TIM1->BDTR |= (0b01000100);								// 404nS deadtime
-	TIM1->BDTR |= (0b10010100);								// 1us deadtime
+	TIM1->BDTR |= (0b10010100);									// 1us deadtime
  8000f58:	4b1a      	ldr	r3, [pc, #104]	; (8000fc4 <pwm_init+0x1cc>)
  8000f5a:	6c5b      	ldr	r3, [r3, #68]	; 0x44
  8000f5c:	4a19      	ldr	r2, [pc, #100]	; (8000fc4 <pwm_init+0x1cc>)
