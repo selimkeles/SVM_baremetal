@@ -27,9 +27,9 @@ Idx Name          Size      VMA       LMA       File off  Algn
                   ALLOC
  11 .ARM.attributes 00000030  00000000  00000000  00020014  2**0
                   CONTENTS, READONLY
- 12 .debug_info   00002b3e  00000000  00000000  00020044  2**0
+ 12 .debug_info   00002b3f  00000000  00000000  00020044  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 13 .debug_abbrev 0000072b  00000000  00000000  00022b82  2**0
+ 13 .debug_abbrev 0000072b  00000000  00000000  00022b83  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
  14 .debug_aranges 00000210  00000000  00000000  000232b0  2**3
                   CONTENTS, READONLY, DEBUGGING, OCTETS
@@ -1021,13 +1021,13 @@ int main(void)
 
   set_sysclk_to_168();											// Set main clock to 168MHz
  8000c38:	f000 f984 	bl	8000f44 <set_sysclk_to_168>
-  gpio_init();													// Set GPIO pins for pwm output
+  gpio_init();													// Set GPIO pins for PWM output
  8000c3c:	f000 f852 	bl	8000ce4 <gpio_init>
-  timer1_init();
+  timer1_init();												// Configure Timer1 for PWM generation
  8000c40:	f000 f88c 	bl	8000d5c <timer1_init>
-  pwm_button_init();
+  pwm_button_init();											// Configuration for PWM Enable Button
  8000c44:	f000 f804 	bl	8000c50 <pwm_button_init>
-  adc_init();
+  adc_init();													// Configuration for ADC to obtain PWM Data
  8000c48:	f000 f920 	bl	8000e8c <adc_init>
 
   while(1){}
@@ -1091,19 +1091,19 @@ void pwm_button_init(void)
  8000ca2:	4a0f      	ldr	r2, [pc, #60]	; (8000ce0 <pwm_button_init+0x90>)
  8000ca4:	f043 4380 	orr.w	r3, r3, #1073741824	; 0x40000000
  8000ca8:	6013      	str	r3, [r2, #0]
-	GPIOD->MODER |= (1<<28);									// D6 BLUE LED SET OUTPUT
+	GPIOD->MODER |= (1<<28);									// D5 GREEN LED SET OUTPUT
  8000caa:	4b0d      	ldr	r3, [pc, #52]	; (8000ce0 <pwm_button_init+0x90>)
  8000cac:	681b      	ldr	r3, [r3, #0]
  8000cae:	4a0c      	ldr	r2, [pc, #48]	; (8000ce0 <pwm_button_init+0x90>)
  8000cb0:	f043 5380 	orr.w	r3, r3, #268435456	; 0x10000000
  8000cb4:	6013      	str	r3, [r2, #0]
-	GPIOD->MODER |= (1<<26);									// D6 BLUE LED SET OUTPUT
+	GPIOD->MODER |= (1<<26);									// D4 ORANGE LED SET OUTPUT
  8000cb6:	4b0a      	ldr	r3, [pc, #40]	; (8000ce0 <pwm_button_init+0x90>)
  8000cb8:	681b      	ldr	r3, [r3, #0]
  8000cba:	4a09      	ldr	r2, [pc, #36]	; (8000ce0 <pwm_button_init+0x90>)
  8000cbc:	f043 6380 	orr.w	r3, r3, #67108864	; 0x4000000
  8000cc0:	6013      	str	r3, [r2, #0]
-	GPIOD->MODER |= (1<<24);									// D6 BLUE LED SET OUTPUT
+	GPIOD->MODER |= (1<<24);									// D3 YELLOW LED SET OUTPUT (Color order might be different)
  8000cc2:	4b07      	ldr	r3, [pc, #28]	; (8000ce0 <pwm_button_init+0x90>)
  8000cc4:	681b      	ldr	r3, [r3, #0]
  8000cc6:	4a06      	ldr	r2, [pc, #24]	; (8000ce0 <pwm_button_init+0x90>)
@@ -1225,7 +1225,7 @@ void timer1_init(void)
  8000d6a:	6453      	str	r3, [r2, #68]	; 0x44
 
 	// Output Configurations
-	TIM1->CR1   |= (TIM_CR1_CMS_Msk);								// TIMER1 counts in Center Aligned Mod 1
+	TIM1->CR1   |= (TIM_CR1_CMS_Msk);							// TIMER1 counts in Center Aligned Mod 1
  8000d6c:	4b38      	ldr	r3, [pc, #224]	; (8000e50 <timer1_init+0xf4>)
  8000d6e:	681b      	ldr	r3, [r3, #0]
  8000d70:	4a37      	ldr	r2, [pc, #220]	; (8000e50 <timer1_init+0xf4>)
@@ -1300,7 +1300,7 @@ void timer1_init(void)
 	//TIM1->BDTR |= (0b00011010);								// 155nS deadtime
 	//TIM1->BDTR |= (0b00100010);								// 202nS deadtime
 	//TIM1->BDTR |= (0b01000100);								// 404nS deadtime
-	TIM1->BDTR |= (0b10010100);								// 1us deadtime
+	TIM1->BDTR |= (0b10010100);									// 1us deadtime
  8000de6:	4b1a      	ldr	r3, [pc, #104]	; (8000e50 <timer1_init+0xf4>)
  8000de8:	6c5b      	ldr	r3, [r3, #68]	; 0x44
  8000dea:	4a19      	ldr	r2, [pc, #100]	; (8000e50 <timer1_init+0xf4>)
@@ -1308,7 +1308,6 @@ void timer1_init(void)
  8000df0:	6453      	str	r3, [r2, #68]	; 0x44
 	//TIM1->BDTR |= (0b11001010);								// 2uS deadtime
 
-	//TIM1->RCR = 0;											// After 50usx200=10ms ;
 	TIM1->CR1 &= ~TIM_CR1_UDIS;									// Update Disabled bit disabled
  8000df2:	4b17      	ldr	r3, [pc, #92]	; (8000e50 <timer1_init+0xf4>)
  8000df4:	681b      	ldr	r3, [r3, #0]
@@ -1694,13 +1693,13 @@ void TIM1_UP_TIM10_IRQHandler(void)
 {
  8001088:	e92d 43b0 	stmdb	sp!, {r4, r5, r7, r8, r9, lr}
  800108c:	af00      	add	r7, sp, #0
-	ADC1->CR2 |= (1<<30);  										// start the conversion
+	ADC1->CR2 |= (1<<30);  										// start the ADC conversion
  800108e:	4bb4      	ldr	r3, [pc, #720]	; (8001360 <TIM1_UP_TIM10_IRQHandler+0x2d8>)
  8001090:	689b      	ldr	r3, [r3, #8]
  8001092:	4ab3      	ldr	r2, [pc, #716]	; (8001360 <TIM1_UP_TIM10_IRQHandler+0x2d8>)
  8001094:	f043 4380 	orr.w	r3, r3, #1073741824	; 0x40000000
  8001098:	6093      	str	r3, [r2, #8]
-	sector=(theta)/60+1;
+	sector=(theta)/60+1;										// gets Space Vector Sector data from current angle
  800109a:	4bb2      	ldr	r3, [pc, #712]	; (8001364 <TIM1_UP_TIM10_IRQHandler+0x2dc>)
  800109c:	ed93 7a00 	vldr	s14, [r3]
  80010a0:	eddf 6ab1 	vldr	s13, [pc, #708]	; 8001368 <TIM1_UP_TIM10_IRQHandler+0x2e0>
@@ -1711,13 +1710,13 @@ void TIM1_UP_TIM10_IRQHandler(void)
  80010b4:	ee17 2a90 	vmov	r2, s15
  80010b8:	4bac      	ldr	r3, [pc, #688]	; (800136c <TIM1_UP_TIM10_IRQHandler+0x2e4>)
  80010ba:	601a      	str	r2, [r3, #0]
-	TIM1->SR &=~(TIM_SR_UIF);									// Lower Interrupt flag
+	TIM1->SR &=~(TIM_SR_UIF);									// Lower Interrupt flag for next interrupts
  80010bc:	4bac      	ldr	r3, [pc, #688]	; (8001370 <TIM1_UP_TIM10_IRQHandler+0x2e8>)
  80010be:	691b      	ldr	r3, [r3, #16]
  80010c0:	4aab      	ldr	r2, [pc, #684]	; (8001370 <TIM1_UP_TIM10_IRQHandler+0x2e8>)
  80010c2:	f023 0301 	bic.w	r3, r3, #1
  80010c6:	6113      	str	r3, [r2, #16]
-	T1=TS*M*sin((PI/3)*(sector) - (theta*PI/180));
+	T1=TS*M*sin((PI/3)*(sector) - (theta*PI/180));				// Calculates T1 dwell time
  80010c8:	4baa      	ldr	r3, [pc, #680]	; (8001374 <TIM1_UP_TIM10_IRQHandler+0x2ec>)
  80010ca:	681b      	ldr	r3, [r3, #0]
  80010cc:	ee07 3a90 	vmov	s15, r3
@@ -1777,7 +1776,7 @@ void TIM1_UP_TIM10_IRQHandler(void)
  8001164:	4603      	mov	r3, r0
  8001166:	4a86      	ldr	r2, [pc, #536]	; (8001380 <TIM1_UP_TIM10_IRQHandler+0x2f8>)
  8001168:	6013      	str	r3, [r2, #0]
-	T2=TS*M*sin((-PI/3)*(sector-1) +(theta*PI/180));
+	T2=TS*M*sin((-PI/3)*(sector-1) +(theta*PI/180));			// Calculates T2 dwell time
  800116a:	4b82      	ldr	r3, [pc, #520]	; (8001374 <TIM1_UP_TIM10_IRQHandler+0x2ec>)
  800116c:	681b      	ldr	r3, [r3, #0]
  800116e:	ee07 3a90 	vmov	s15, r3
@@ -1838,7 +1837,7 @@ void TIM1_UP_TIM10_IRQHandler(void)
  8001208:	4603      	mov	r3, r0
  800120a:	4a5e      	ldr	r2, [pc, #376]	; (8001384 <TIM1_UP_TIM10_IRQHandler+0x2fc>)
  800120c:	6013      	str	r3, [r2, #0]
-	Tz=TS-T1-T2;
+	Tz=TS-T1-T2;												// Calculates Tzero dwell time
  800120e:	4b59      	ldr	r3, [pc, #356]	; (8001374 <TIM1_UP_TIM10_IRQHandler+0x2ec>)
  8001210:	681a      	ldr	r2, [r3, #0]
  8001212:	4b5b      	ldr	r3, [pc, #364]	; (8001380 <TIM1_UP_TIM10_IRQHandler+0x2f8>)
@@ -1864,7 +1863,7 @@ void TIM1_UP_TIM10_IRQHandler(void)
  8001244:	08001315 	.word	0x08001315
  8001248:	0800138d 	.word	0x0800138d
 	{
-	case 1:
+	case 1:														// Sector 1 outputs for all phases
 	TIM1->CCR1=(Tz/2 + T1 +T2);
  800124c:	4b4e      	ldr	r3, [pc, #312]	; (8001388 <TIM1_UP_TIM10_IRQHandler+0x300>)
  800124e:	681b      	ldr	r3, [r3, #0]
@@ -1895,7 +1894,7 @@ void TIM1_UP_TIM10_IRQHandler(void)
 	break;
  800127c:	e0a0      	b.n	80013c0 <TIM1_UP_TIM10_IRQHandler+0x338>
 
-	case 2:
+	case 2:														// Sector 2 outputs for all phases
 	TIM1->CCR1=(Tz/2 +T1);
  800127e:	4b42      	ldr	r3, [pc, #264]	; (8001388 <TIM1_UP_TIM10_IRQHandler+0x300>)
  8001280:	681b      	ldr	r3, [r3, #0]
@@ -1926,7 +1925,7 @@ void TIM1_UP_TIM10_IRQHandler(void)
 	break;
  80012ae:	e087      	b.n	80013c0 <TIM1_UP_TIM10_IRQHandler+0x338>
 
-	case 3:
+	case 3:														// Sector 3 outputs for all phases
 	TIM1->CCR1=(Tz/2);
  80012b0:	4b35      	ldr	r3, [pc, #212]	; (8001388 <TIM1_UP_TIM10_IRQHandler+0x300>)
  80012b2:	681b      	ldr	r3, [r3, #0]
@@ -1957,7 +1956,7 @@ void TIM1_UP_TIM10_IRQHandler(void)
 	break;
  80012e0:	e06e      	b.n	80013c0 <TIM1_UP_TIM10_IRQHandler+0x338>
 
-	case 4:
+	case 4:														// Sector 4 outputs for all phases
 	TIM1->CCR1=(Tz/2);
  80012e2:	4b29      	ldr	r3, [pc, #164]	; (8001388 <TIM1_UP_TIM10_IRQHandler+0x300>)
  80012e4:	681b      	ldr	r3, [r3, #0]
@@ -1988,7 +1987,7 @@ void TIM1_UP_TIM10_IRQHandler(void)
 	break;
  8001312:	e055      	b.n	80013c0 <TIM1_UP_TIM10_IRQHandler+0x338>
 
-	case 5:
+	case 5:														// Sector 5 outputs for all phases
 	TIM1->CCR1=(Tz/2 + T2);
  8001314:	4b1c      	ldr	r3, [pc, #112]	; (8001388 <TIM1_UP_TIM10_IRQHandler+0x300>)
  8001316:	681b      	ldr	r3, [r3, #0]
@@ -2037,7 +2036,7 @@ void TIM1_UP_TIM10_IRQHandler(void)
  8001384:	20000038 	.word	0x20000038
  8001388:	2000003c 	.word	0x2000003c
 
-	case 6:
+	case 6:														// Sector 6 outputs for all phases
 	TIM1->CCR1=(Tz/2 + T1 +T2);
  800138c:	4b3e      	ldr	r3, [pc, #248]	; (8001488 <TIM1_UP_TIM10_IRQHandler+0x400>)
  800138e:	681b      	ldr	r3, [r3, #0]
@@ -2073,7 +2072,7 @@ void TIM1_UP_TIM10_IRQHandler(void)
  80013be:	bf00      	nop
 	}
 
-	freq = (ADC1->DR)/50;  											// Read the Data Register
+	freq = (ADC1->DR)/50;  										// Write ADC Value to frequency variable and scale it to max 80Hz
  80013c0:	4b35      	ldr	r3, [pc, #212]	; (8001498 <TIM1_UP_TIM10_IRQHandler+0x410>)
  80013c2:	6cdb      	ldr	r3, [r3, #76]	; 0x4c
  80013c4:	4a35      	ldr	r2, [pc, #212]	; (800149c <TIM1_UP_TIM10_IRQHandler+0x414>)
@@ -2082,7 +2081,7 @@ void TIM1_UP_TIM10_IRQHandler(void)
  80013cc:	461a      	mov	r2, r3
  80013ce:	4b34      	ldr	r3, [pc, #208]	; (80014a0 <TIM1_UP_TIM10_IRQHandler+0x418>)
  80013d0:	601a      	str	r2, [r3, #0]
-	M=freq/50.0;
+	M=freq/50.0;												// V/f Control
  80013d2:	4b33      	ldr	r3, [pc, #204]	; (80014a0 <TIM1_UP_TIM10_IRQHandler+0x418>)
  80013d4:	681b      	ldr	r3, [r3, #0]
  80013d6:	4618      	mov	r0, r3
@@ -2098,7 +2097,7 @@ void TIM1_UP_TIM10_IRQHandler(void)
  80013f2:	4603      	mov	r3, r0
  80013f4:	4a2c      	ldr	r2, [pc, #176]	; (80014a8 <TIM1_UP_TIM10_IRQHandler+0x420>)
  80013f6:	6013      	str	r3, [r2, #0]
-	if(M>1) M=1;
+	if(M>1) M=1;												// Field Weakening to prevent working on 6 Step PWM mode
  80013f8:	4b2b      	ldr	r3, [pc, #172]	; (80014a8 <TIM1_UP_TIM10_IRQHandler+0x420>)
  80013fa:	edd3 7a00 	vldr	s15, [r3]
  80013fe:	eeb7 7a00 	vmov.f32	s14, #112	; 0x3f800000  1.0
@@ -2108,7 +2107,7 @@ void TIM1_UP_TIM10_IRQHandler(void)
  800140c:	4b26      	ldr	r3, [pc, #152]	; (80014a8 <TIM1_UP_TIM10_IRQHandler+0x420>)
  800140e:	f04f 527e 	mov.w	r2, #1065353216	; 0x3f800000
  8001412:	601a      	str	r2, [r3, #0]
-	theta+=(freq*360/f);
+	theta+=(freq*360/f);										// Calculating the next angle for given frequency rate (Open Loop Control)
  8001414:	4b25      	ldr	r3, [pc, #148]	; (80014ac <TIM1_UP_TIM10_IRQHandler+0x424>)
  8001416:	681b      	ldr	r3, [r3, #0]
  8001418:	4618      	mov	r0, r3
@@ -2137,7 +2136,7 @@ void TIM1_UP_TIM10_IRQHandler(void)
  8001456:	4603      	mov	r3, r0
  8001458:	4a14      	ldr	r2, [pc, #80]	; (80014ac <TIM1_UP_TIM10_IRQHandler+0x424>)
  800145a:	6013      	str	r3, [r2, #0]
-	if(theta>=360) theta=0;
+	if(theta>=360) theta=0;										// Theta becomes zero every period
  800145c:	4b13      	ldr	r3, [pc, #76]	; (80014ac <TIM1_UP_TIM10_IRQHandler+0x424>)
  800145e:	edd3 7a00 	vldr	s15, [r3]
  8001462:	ed9f 7a13 	vldr	s14, [pc, #76]	; 80014b0 <TIM1_UP_TIM10_IRQHandler+0x428>
@@ -2146,7 +2145,7 @@ void TIM1_UP_TIM10_IRQHandler(void)
  800146e:	da00      	bge.n	8001472 <TIM1_UP_TIM10_IRQHandler+0x3ea>
 }
  8001470:	e003      	b.n	800147a <TIM1_UP_TIM10_IRQHandler+0x3f2>
-	if(theta>=360) theta=0;
+	if(theta>=360) theta=0;										// Theta becomes zero every period
  8001472:	4b0e      	ldr	r3, [pc, #56]	; (80014ac <TIM1_UP_TIM10_IRQHandler+0x424>)
  8001474:	f04f 0200 	mov.w	r2, #0
  8001478:	601a      	str	r2, [r3, #0]

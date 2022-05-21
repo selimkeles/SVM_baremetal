@@ -1,3 +1,16 @@
+/*
+ * This Project aims to generate AC signal with desired frequency and amplitude.
+ * To achieve this goal Space Vector PWM method with open loop(V/F Control) implemented using this microcontroller.
+ * Conventional Method to calculate dwell times used since microcontroller's processing capabilities enable that kind of operation.
+ * Assuming this Inverter going to be used in driving AC Motors, field weakening process(V/f Control) implemented.
+ * Amplitude of AC signal decreases linearly with respect to frequency.
+ * GPIO PINS B0 B1 E8 E9 E11 and E13 used for gate signals to VSI circuit.
+ * GPIO PIN A0 configured as input for enabling PWM output since Discovery Development KIT's onboard user button connected to this pin
+ * GPIO PIN C1 configured as ADC input to read Frequency variable being set by user.
+ */
+
+
+
 #include "main.h"
 #include <math.h>
 #include "stm32f407xx.h"
@@ -35,10 +48,10 @@ int main(void)
 {
 
   set_sysclk_to_168();											// Set main clock to 168MHz
-  gpio_init();													// Set GPIO pins for pwm output
-  timer1_init();
-  pwm_button_init();
-  adc_init();
+  gpio_init();													// Set GPIO pins for PWM output
+  timer1_init();												// Configure Timer1 for PWM generation
+  pwm_button_init();											// Configuration for PWM Enable Button
+  adc_init();													// Configuration for ADC to obtain PWM Data
 
   while(1){}
 }
@@ -60,9 +73,9 @@ void pwm_button_init(void)
 	NVIC_EnableIRQ(EXTI0_IRQn);									// Enable EXTI Interrupt
 
 	GPIOD->MODER |= (1<<30);									// D6 BLUE LED SET OUTPUT
-	GPIOD->MODER |= (1<<28);									// D6 BLUE LED SET OUTPUT
-	GPIOD->MODER |= (1<<26);									// D6 BLUE LED SET OUTPUT
-	GPIOD->MODER |= (1<<24);									// D6 BLUE LED SET OUTPUT
+	GPIOD->MODER |= (1<<28);									// D5 GREEN LED SET OUTPUT
+	GPIOD->MODER |= (1<<26);									// D4 ORANGE LED SET OUTPUT
+	GPIOD->MODER |= (1<<24);									// D3 YELLOW LED SET OUTPUT (Color order might be different)
 }
 
 /******************************************/
@@ -110,7 +123,7 @@ void timer1_init(void)
 	RCC->APB2ENR |= 1;											// Enable TIM1 Clock
 
 	// Output Configurations
-	TIM1->CR1   |= (TIM_CR1_CMS_Msk);								// TIMER1 counts in Center Aligned Mod 1
+	TIM1->CR1   |= (TIM_CR1_CMS_Msk);							// TIMER1 counts in Center Aligned Mod 1
 	TIM1->CCMR1 |= 6<<TIM_CCMR1_OC1M_Pos;						// TIMER1 CCMR1 Register configured as PWM TYPE1 output
 	TIM1->CCMR1 |= 6<<TIM_CCMR1_OC2M_Pos;						// TIMER1 CCMR2 Register configured as PWM TYPE1 output
 	TIM1->CCMR2 |= 6<<TIM_CCMR2_OC3M_Pos;						// TIMER1 CCMR1 Register configured as PWM TYPE1 output
@@ -134,10 +147,9 @@ void timer1_init(void)
 	//TIM1->BDTR |= (0b00011010);								// 155nS deadtime
 	//TIM1->BDTR |= (0b00100010);								// 202nS deadtime
 	//TIM1->BDTR |= (0b01000100);								// 404nS deadtime
-	TIM1->BDTR |= (0b10010100);								// 1us deadtime
+	TIM1->BDTR |= (0b10010100);									// 1us deadtime
 	//TIM1->BDTR |= (0b11001010);								// 2uS deadtime
 
-	//TIM1->RCR = 0;											// After 50usx200=10ms ;
 	TIM1->CR1 &= ~TIM_CR1_UDIS;									// Update Disabled bit disabled
 	TIM1->DIER|= TIM_DIER_UIE;									// Update Interrupt Enabled
 
@@ -250,45 +262,45 @@ void set_sysclk_to_168(void)
 /******************************************/
 void TIM1_UP_TIM10_IRQHandler(void)
 {
-	ADC1->CR2 |= (1<<30);  										// start the conversion
-	sector=(theta)/60+1;
-	TIM1->SR &=~(TIM_SR_UIF);									// Lower Interrupt flag
-	T1=TS*M*sin((PI/3)*(sector) - (theta*PI/180));
-	T2=TS*M*sin((-PI/3)*(sector-1) +(theta*PI/180));
-	Tz=TS-T1-T2;
+	ADC1->CR2 |= (1<<30);  										// start the ADC conversion
+	sector=(theta)/60+1;										// gets Space Vector Sector data from current angle
+	TIM1->SR &=~(TIM_SR_UIF);									// Lower Interrupt flag for next interrupts
+	T1=TS*M*sin((PI/3)*(sector) - (theta*PI/180));				// Calculates T1 dwell time
+	T2=TS*M*sin((-PI/3)*(sector-1) +(theta*PI/180));			// Calculates T2 dwell time
+	Tz=TS-T1-T2;												// Calculates Tzero dwell time
 	switch (sector)
 	{
-	case 1:
+	case 1:														// Sector 1 outputs for all phases
 	TIM1->CCR1=(Tz/2 + T1 +T2);
 	TIM1->CCR2=(Tz/2 + T2);
 	TIM1->CCR3=(Tz/2);
 	break;
 
-	case 2:
+	case 2:														// Sector 2 outputs for all phases
 	TIM1->CCR1=(Tz/2 +T1);
 	TIM1->CCR2=(Tz/2 + T1 +T2);
 	TIM1->CCR3=(Tz/2);
 	break;
 
-	case 3:
+	case 3:														// Sector 3 outputs for all phases
 	TIM1->CCR1=(Tz/2);
 	TIM1->CCR2=(Tz/2 + T1 +T2);
 	TIM1->CCR3=(Tz/2 + T2);
 	break;
 
-	case 4:
+	case 4:														// Sector 4 outputs for all phases
 	TIM1->CCR1=(Tz/2);
 	TIM1->CCR2=(Tz/2 +T1);
 	TIM1->CCR3=(Tz/2 + T1 +T2);
 	break;
 
-	case 5:
+	case 5:														// Sector 5 outputs for all phases
 	TIM1->CCR1=(Tz/2 + T2);
 	TIM1->CCR2=(Tz/2);
 	TIM1->CCR3=(Tz/2 + T1 +T2);
 	break;
 
-	case 6:
+	case 6:														// Sector 6 outputs for all phases
 	TIM1->CCR1=(Tz/2 + T1 +T2);
 	TIM1->CCR2=(Tz/2);
 	TIM1->CCR3=(Tz/2 +T1);
@@ -298,11 +310,11 @@ void TIM1_UP_TIM10_IRQHandler(void)
 	break;
 	}
 
-	freq = (ADC1->DR)/50;  											// Read the Data Register
-	M=freq/50.0;
-	if(M>1) M=1;
-	theta+=(freq*360/f);
-	if(theta>=360) theta=0;
+	freq = (ADC1->DR)/50;  										// Write ADC Value to frequency variable and scale it to max 80Hz
+	M=freq/50.0;												// V/f Control
+	if(M>1) M=1;												// Field Weakening to prevent working on 6 Step PWM mode
+	theta+=(freq*360/f);										// Calculating the next angle for given frequency rate (Open Loop Control)
+	if(theta>=360) theta=0;										// Theta becomes zero every period
 }
 /******************************************/
 /***			EXTI0 INTERRUPT			***/
