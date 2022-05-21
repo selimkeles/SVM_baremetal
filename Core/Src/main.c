@@ -1,140 +1,120 @@
 #include "main.h"
-#include "Inverter.h"
 #include <math.h>
 #include "stm32f407xx.h"
 #include "stm32f4xx.h"
 
-
-/******************************************/
-/***		CLOCK PREPROCESSORS 		***/
-/******************************************/
-#if defined (STM32F407xx) || defined (STM32F429xx)
-// Main PLL = N * (source_clock / M) / P
-// HSE = 8 Mhz
-// fCLK =   N * (8Mhz / M) / P
-#define PLL_M   8
-#define PLL_Q   7
-#define PLL_P   2
-#endif
-/* stm32f407 runs at 168Mhz max */
-#if defined (STM32F407xx)
-#define PLL_N   336
-#endif
-
-/******************************************/
-/***	LOOKUP TABLE GLOBAL PARAMETERS 	***/
-/******************************************/
-#define PI 3.141592
-#define RESO 360						// Sinusoidal resolution(Degree)
-#define DEC (RESO/360)					// Decrement rate if Reso is higher than 360 degree (Finds the multiplier of 360 degrees)
-#define PHASESHIFT (RESO/12)			// Phase Shift for triangular wave
-#define TRISIZE (RESO+RESO/12)			// Triangular wave array size is bit higher than sinus arrays since we have to shift it
-
-unsigned int MAX_CNT=8400;				// Amplitude is equal to the Timer Period
-double sin_arr[RESO];					// Lookup table arrays
-double tri_arr[TRISIZE];
-uint32_t u[RESO];
-uint32_t v[RESO];
-uint32_t w[RESO];
-
-volatile int count=0;					//
-volatile int s=0;
-
 /******************************************/
 /***		FUNCTION PROTOTYPES			***/
 /******************************************/
-
-void create_lookuptable(double M);
-void pwm_init(void);
 void set_sysclk_to_168(void);
-void dma_init(void);
+void timer1_init(void);
+void gpio_init(void);
+void pwm_button_init(void);
+void delay_ms(const uint16_t us);
+void adc_init(void);
+void TIM1_UP_TIM10_IRQHandler(void);
+void EXTI0_IRQHandler(void);
 
-
+/******************************************/
+/***		GLOBAL PARAMETERS			***/
+/******************************************/
+#define PI 3.141592
+const double f=10000*2;
+unsigned int TS=(168000000/f);
+unsigned int T1;
+unsigned int T2;
+unsigned int Tz;
+float M=1;
+float theta=0;
+int sector=1;
+int freq=0;
 /******************************************/
 /***				MAIN				***/
 /******************************************/
 int main(void)
 {
 
-  set_sysclk_to_168();										// Set main clock to 168MHz
-  double Mod_Index=1;										// Modulation Index for lookup table
-
-  create_lookuptable(Mod_Index);							// Creates SVM lookup table
-
-  pwm_init();												// Initializes Timer1 for PWM Config
-  dma_init();												// Initializes Direct Memory Access
-
-  TIM1->CR1  |= (TIM_CR1_CEN_Msk);							// Counter enabled
-  TIM1->BDTR |= (TIM_BDTR_MOE_Msk);							// Global output enable for TIM1
+  set_sysclk_to_168();											// Set main clock to 168MHz
+  gpio_init();													// Set GPIO pins for pwm output
+  timer1_init();
+  pwm_button_init();
+  adc_init();
 
   while(1){}
 }
 
 /******************************************/
-/***		LOOKUP TABLE FUNCTION		***/
+/***			PWM Button Init				***/
 /******************************************/
-void create_lookuptable(double M)
+void pwm_button_init(void)
 {
-	int i;																			// Array Indexer
-	for(i=0;i<RESO;i++)
-		sin_arr[i]=(MAX_CNT*0.5*(sin((2*PI*i/DEC)/360)));							// Creates Sinus
+	RCC->AHB1ENR |= ((1<<3)|1);									// Enable GPIOD and GPIOA clocks
+	RCC->APB2ENR |= RCC_APB2ENR_SYSCFGEN;						// Enable EXTI registers
+	SYSCFG->EXTICR[0] = 0;										// Select A0 as EXTI source
 
-	for(i=0;i<TRISIZE;i++)
-		tri_arr[i]=0.288*((MAX_CNT*(60-fabs((i/DEC)%(120)-60))/60)-MAX_CNT/2);		// Creates Triangular Wave
+	EXTI->IMR = 1;												// Enable A0 channel interrupts
+	EXTI->RTSR |= 1;											// Rising Edge Detection
+	EXTI->FTSR &= ~1;											// Falling Edge Detection cleared
 
-	for(i=0;i<RESO;i++)
-		u[i]=M*1.154*sin_arr[i]+tri_arr[i+PHASESHIFT]+MAX_CNT/2;					// Creates SVM waveform (U-Phase)
+	NVIC_SetPriority(EXTI0_IRQn, 0);							// Set Priority to EXTI Interrupt
+	NVIC_EnableIRQ(EXTI0_IRQn);									// Enable EXTI Interrupt
 
-	for(i=0;i<RESO;i++)
-		{if(i<241) v[i+(RESO/3)]=u[i]; else v[i-(2*RESO/3)+1]=u[i];}				// Creates V phase by phase shifting
-	for(i=0;i<RESO;i++)
-		{if(i<121) w[i+(2*RESO/3)]=u[i]; else w[i-(RESO/3)+1]=u[i];}				// Creates W phase by phase shifting
+	GPIOD->MODER |= (1<<30);									// D6 BLUE LED SET OUTPUT
+	GPIOD->MODER |= (1<<28);									// D6 BLUE LED SET OUTPUT
+	GPIOD->MODER |= (1<<26);									// D6 BLUE LED SET OUTPUT
+	GPIOD->MODER |= (1<<24);									// D6 BLUE LED SET OUTPUT
+}
+
+/******************************************/
+/***			GPIO INIT				***/
+/******************************************/
+void gpio_init(void)
+{
+	RCC->AHB1ENR |= (1<<4 | 1<<1);								// Enable GPIOB and GPIOE Clock
+
+	GPIOE->PUPDR  = 0;											// Pin configuration
+	GPIOB->PUPDR  = 0;											// Pin configuration
+	GPIOE->OTYPER = 0;											// Pin configuration
+	GPIOB->OTYPER = 0;											// Pin configuration
+
+	GPIOE->MODER  = ((1<<19)
+					|(1<<17)
+					|(1<<23)
+					|(1<<27));									// GPIOE Pins 8 9 11 13 configured as Alternate Function
+
+	GPIOE->OSPEEDR= ((1<<19)
+					|(1<<17)
+					|(1<<23)
+					|(1<<27));									// Output Speed Set to MAX(6ns rise and fall) for all pins
+
+	GPIOE->AFR[1] = (GPIO_AFRH_AFRH1_0
+					|GPIO_AFRH_AFRH0_0
+					|GPIO_AFRH_AFRH3_0
+					|GPIO_AFRH_AFRH5_0);						// Configuring High Side pins 0001 (TIM1 Peripheral) in alternate function multiplexer
+
+	GPIOB->MODER |= ((1<<1)
+					|(1<<3));									// GPIOB Pins 0 1configured as Alternate Function
+
+	GPIOB->OSPEEDR= ((1<<1)
+					|(1<<3));									// Output Speed Set to MAX(6ns rise and fall)
+
+	GPIOB->AFR[0]|= (GPIO_AFRL_AFRL0_0
+					|GPIO_AFRL_AFRL1_0);						// Configuring Low Side pins for 0001 (TIM1 Peripheral) in alternate function multiplexer
 }
 
 /******************************************/
 /***			TIMER1 INIT				***/
 /******************************************/
-void pwm_init(void)
+void timer1_init(void)
 {
-	RCC->AHB1ENR |= (1<<4 | 1<<1);								// Enable GPIOB and GPIOE Clock
-
-	GPIOE->PUPDR  = 0;											// Pin configuration
-	GPIOE->OTYPER = 0;											// Pin configuration
-	GPIOE->MODER  = (1<<19);									// GPIOE Pin9 configured as Alternate Function
-	GPIOE->OSPEEDR= (1<<19);									// Output Speed Set to MAX(6ns rise and fall)
-	GPIOE->AFR[1] = (GPIO_AFRH_AFRH1_0);						// Configuring High Side 2nd pin for 0001 (TIM1 Peripheral) in alternate function multiplexer
-
-	GPIOE->MODER |= (1<<17);									// GPIOE Pin8 configured as Alternate Function
-	GPIOE->OSPEEDR= (1<<17);									// Output Speed Set to MAX(6ns rise and fall)
-	GPIOE->AFR[1]|= (GPIO_AFRH_AFRH0_0);						// Configuring High Side 1st pin for 0001 (TIM1 Peripheral) in alternate function multiplexer
-
-	GPIOE->MODER |= (1<<23);									// GPIOE Pin11 configured as Alternate Function
-	GPIOE->OSPEEDR= (1<<23);									// Output Speed Set to MAX(6ns rise and fall)
-	GPIOE->AFR[1]|= (GPIO_AFRH_AFRH3_0);						// Configuring High Side 4th pin for 0001 (TIM1 Peripheral) in alternate function multiplexer
-
-	GPIOB->PUPDR  = 0;											// Pin configuration
-	GPIOB->OTYPER = 0;											// Pin configuration
-	GPIOB->MODER |= (1<<1);										// GPIOB Pin0 configured as Alternate Function
-	GPIOB->OSPEEDR= (1<<1);										// Output Speed Set to MAX(6ns rise and fall)
-	GPIOB->AFR[0]|= (GPIO_AFRL_AFRL0_0);						// Configuring Low Side 1st pin for 0001 (TIM1 Peripheral) in alternate function multiplexer
-
-	GPIOE->MODER |= (1<<27);									// GPIOE Pin13 configured as Alternate Function
-	GPIOE->OSPEEDR= (1<<27);									// Output Speed Set to MAX(6ns rise and fall)
-	GPIOE->AFR[1]|= (GPIO_AFRH_AFRH5_0);						// Configuring High Side 6th pin for 0001 (TIM1 Peripheral) in alternate function multiplexer
-
-	GPIOB->MODER |= (1<<3);										// GPIOB Pin1 configured as Alternate Function
-	GPIOB->OSPEEDR= (1<<3);										// Output Speed Set to MAX(6ns rise and fall)
-	GPIOB->AFR[0]|= (GPIO_AFRL_AFRL1_0);						// Configuring Low Side 1st pin for 0001 (TIM1 Peripheral) in alternate function multiplexer
-
-	/*****************************************************/
-
 	RCC->APB2ENR |= 1;											// Enable TIM1 Clock
 
 	// Output Configurations
-	TIM1->CR1   |= (TIM_CR1_CMS_Msk);							// TIMER1 counts in Center Aligned Mod 3
+	TIM1->CR1   |= (TIM_CR1_CMS_Msk);								// TIMER1 counts in Center Aligned Mod 1
 	TIM1->CCMR1 |= 6<<TIM_CCMR1_OC1M_Pos;						// TIMER1 CCMR1 Register configured as PWM TYPE1 output
 	TIM1->CCMR1 |= 6<<TIM_CCMR1_OC2M_Pos;						// TIMER1 CCMR2 Register configured as PWM TYPE1 output
 	TIM1->CCMR2 |= 6<<TIM_CCMR2_OC3M_Pos;						// TIMER1 CCMR1 Register configured as PWM TYPE1 output
+
 	TIM1->CCMR1 &= ~(TIM_CCMR1_CC1S);							// TIMER1 CC1S bits cleared for output configuration
 	TIM1->CCMR1 &= ~(TIM_CCMR1_CC2S);							// TIMER1 CC2S bits cleared for output configuration
 	TIM1->CCMR2 &= ~(TIM_CCMR2_CC3S);							// TIMER1 CC3S bits cleared for output configuration
@@ -142,10 +122,10 @@ void pwm_init(void)
 	// Counter Setup
 	TIM1->PSC  = 0; 											// 168MHz 5.95nS
 	TIM1->CNT  = 0;												// Reset Current Counter
-	TIM1->ARR  = 8400;											// Center Mode pit to peak is 50uS
-	TIM1->CCR1 = 0;												// %50 Duty Cycle
-	TIM1->CCR2 = 0;												// %50 Duty Cycle
-	TIM1->CCR3 = 0;												// %50 Duty Cycle
+	TIM1->ARR  = TS;											// Center Mode pit to peak is 50uS "8400"
+	TIM1->CCR1 = 0;												// %0 Duty Cycle
+	TIM1->CCR2 = 0;												// %0 Duty Cycle
+	TIM1->CCR3 = 0;												// %0 Duty Cycle
 
 
 	// Update Configuration
@@ -154,26 +134,56 @@ void pwm_init(void)
 	//TIM1->BDTR |= (0b00011010);								// 155nS deadtime
 	//TIM1->BDTR |= (0b00100010);								// 202nS deadtime
 	//TIM1->BDTR |= (0b01000100);								// 404nS deadtime
-	TIM1->BDTR |= (0b10010100);									// 1us deadtime
+	TIM1->BDTR |= (0b10010100);								// 1us deadtime
 	//TIM1->BDTR |= (0b11001010);								// 2uS deadtime
 
 	//TIM1->RCR = 0;											// After 50usx200=10ms ;
-	TIM1->CR2 |= TIM_CR2_CCDS;
-	TIM1->DIER|=(TIM_DIER_UDE|TIM_DIER_CC1DE|TIM_DIER_CC2DE|TIM_DIER_CC3DE);	// Enables all DMA Access
-	TIM1->DIER|=TIM_DIER_TDE;													// Enable Trigger DMA
-
+	TIM1->CR1 &= ~TIM_CR1_UDIS;									// Update Disabled bit disabled
+	TIM1->DIER|= TIM_DIER_UIE;									// Update Interrupt Enabled
 
 	// Enable Outputs
 	TIM1->CCER |= (TIM_CCER_CC1E | TIM_CCER_CC1NE);				// CC CH1 and CH1n enabled for output
 	TIM1->CCER |= (TIM_CCER_CC2E | TIM_CCER_CC2NE);				// CC CH2 and CH2n enabled for output
 	TIM1->CCER |= (TIM_CCER_CC3E | TIM_CCER_CC3NE);				// CC CH3 and CH3n enabled for output
+
+	NVIC_SetPriority(TIM1_UP_TIM10_IRQn,2);						// Set NVIC Priority
+	NVIC_EnableIRQ(TIM1_UP_TIM10_IRQn);							// Enable Timer1 Interrupt
+
+	TIM1->CR1  |= (TIM_CR1_CEN_Msk);							// Counter enabled
+}
+
+/******************************************/
+/***			DELAY mS				***/
+/******************************************/
+void delay_ms(const uint16_t ms)
+{
+  uint32_t i = ms * 27778;
+  while (i-- > 0) {asm("nop");  }
+}
+
+/******************************************/
+/***			ADC Init				***/
+/******************************************/
+void adc_init(void)
+{
+	RCC->AHB1ENR |= (1<<2); 									// Enable GPIOC Clock
+	GPIOC->MODER |= (3<<2); 									// Set PC1 to analog mode
+	RCC->APB2ENR |= (1 << 8); 									// Enable ADC1 clock
+	ADC->CCR = (1<<16);											// Divide ADC clock by 4 (84/4=21Mh)
+	ADC1->CR1 &= ~(1 << 8); 									// SCAN mode disabled (Bit8)
+	ADC1->CR1 &=  ~(3 << 24); 									// 12bit resolution (Bit24,25 0b00)
+	ADC1->SQR1 |= (1 << 20); 									// Set number of conversions projected (L[3:0] 0b0001) -> 1 conversion
+	ADC1->SQR3 &= ~(0x3FFFFFFF); 								// Clear whole 1st 30bits in register
+	ADC1->SQR3 |= (0b01011); 									// 1st conversion in regular sequence: SQ1: PC1 as ADC1_IN11
+	ADC1->CR2 &= ~(1 << 1); 									// Single conversion
+	ADC1->CR2 &= ~(1 << 11); 									// Right alignment of data bits bit12....bit0
+	ADC1->SMPR2 |= (2 << 0); 									// Sampling rate 40 cycles. 21MHz bus clock for ADC. 1/84MHz = 12nS. 40*12ns=0.47us
+	ADC1->CR2 |= (1 << 0); 										// Switch on ADC1
 }
 
 /******************************************/
 /***			CLOCK INIT				***/
 /******************************************/
-
-
 void set_sysclk_to_168(void)
 {
 	/* FPU settings, can be enabled from project makefile */
@@ -185,55 +195,36 @@ void set_sysclk_to_168(void)
 	/* Set HSION bit */
 	RCC->CR |= (1U << 0);
 
-	/* Reset CFGR register */
-	RCC->CFGR = 0x00000000;
-
-	/* Reset HSEON (16), CSSON (19) and PLLON (24) bits */
-	RCC->CR &= ~((1U << 16) | (1U << 19) | (1U << 24));
-
-	/* Reset PLLCFGR register to reset value */
-	RCC->PLLCFGR = 0x24003010UL;
-
-	/* Reset HSEBYP bit */
-	RCC->CR &= ~(1U << 18);
-
-	/* Disable all clock interrupts */
-	RCC->CIR = 0x00000000UL;
-
+	RCC->CFGR = 0x00000000;										/* Reset CFGR register */
+	RCC->CR &= ~((1U << 16) | (1U << 19) | (1U << 24));			/* Reset HSEON (16), CSSON (19) and PLLON (24) bits */
+	RCC->PLLCFGR = 0x24003010UL;								/* Reset PLLCFGR register to reset value */
+	RCC->CR &= ~(1U << 18);										/* Reset HSEBYP bit */
+	RCC->CIR = 0x00000000UL;									/* Disable all clock interrupts */
 	CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
 	DWT->CYCCNT = 0;
 	DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
-	/* Enable HSE (CR: bit 16) */
-	RCC->CR |= (1U << 16);
-	/* Wait till HSE is ready (CR: bit 17) */
-	while(!(RCC->CR & (1 << 17)));
-
-	/* Enable power interface clock (APB1ENR:bit 28) */
-	RCC->APB1ENR |= (1 << 28);
+	RCC->CR |= (1U << 16);										/* Enable HSE (CR: bit 16) */
+	while(!(RCC->CR & (1 << 17)));								/* Wait till HSE is ready (CR: bit 17) */
+	RCC->APB1ENR |= (1 << 28);									/* Enable power interface clock (APB1ENR:bit 28) */
 
 	/* set voltage scale to 1 for max frequency (PWR_CR:bit 14)
 	 * (0b0) scale 2 for fCLK <= 144 Mhz
 	 * (0b1) scale 1 for 144 Mhz < fCLK <= 168 Mhz
 	 */
 	PWR->CR |= (1 << 14);
-
-	/* set AHB prescaler to /1 (CFGR:bits 7:4) */
-	RCC->CFGR |= (0 << 4);
-	/* set APB low speed prescaler to /4 (APB1) (CFGR:bits 12:10) */
-	RCC->CFGR |= (5 << 10);
-	/* set APB high speed prescaler to /2 (APB2) (CFGR:bits 15:13) */
-	RCC->CFGR |= (4 << 13);
+	RCC->CFGR |= (0 << 4);										/* set AHB prescaler to /1 (CFGR:bits 7:4) */
+	RCC->CFGR |= (5 << 10);										/* set APB low speed prescaler to /4 (APB1) (CFGR:bits 12:10) */
+	RCC->CFGR |= (4 << 13);										/* set APB high speed prescaler to /2 (APB2) (CFGR:bits 15:13) */
 
 	/* Set M, N, P and Q PLL dividers
 	 * PLLCFGR: bits 5:0 (M), 14:6 (N), 17:16 (P), 27:24 (Q)
 	 * Set PLL source to HSE, PLLCFGR: bit 22, 1:HSE, 0:HSI
 	 */
-	RCC->PLLCFGR = PLL_M | (PLL_N << 6) | (((PLL_P >> 1) -1) << 16) |
-	               (PLL_Q << 24) | (1 << 22);
-	/* Enable the main PLL (CR: bit 24) */
-	RCC->CR |= (1 << 24);
-	/* Wait till the main PLL is ready (CR: bit 25) */
-	while(!(RCC->CR & (1 << 25)));
+	RCC->PLLCFGR = 8 | (336 << 6) | (((2 >> 1) -1) << 16) |
+	               (7 << 24) | (1 << 22);
+	RCC->CR |= (1 << 24);										/* Enable the main PLL (CR: bit 24) */
+	while(!(RCC->CR & (1 << 25)));								/* Wait till the main PLL is ready (CR: bit 25) */
+
 	/* Configure Flash
 	 * prefetch enable (ACR:bit 8)
 	 * instruction cache enable (ACR:bit 9)
@@ -250,44 +241,81 @@ void set_sysclk_to_168(void)
 	 */
 	RCC->CFGR &= ~(3U << 0);
 	RCC->CFGR |= (2 << 0);
-	/* Wait till the main PLL is used as system clock source (CFGR:bits 3:2) */
-	while (!(RCC->CFGR & (2U << 2)));
+	while (!(RCC->CFGR & (2U << 2)));							/* Wait till the main PLL is used as system clock source (CFGR:bits 3:2) */
+	SystemCoreClock = 168000000;								// update SystemCoreClock variable
+}
 
-	// update SystemCoreClock variable
-	SystemCoreClock = 168000000;
+/******************************************/
+/***			TIMER1 INTERRUPT		***/
+/******************************************/
+void TIM1_UP_TIM10_IRQHandler(void)
+{
+	ADC1->CR2 |= (1<<30);  										// start the conversion
+	sector=(theta)/60+1;
+	TIM1->SR &=~(TIM_SR_UIF);									// Lower Interrupt flag
+	T1=TS*M*sin((PI/3)*(sector) - (theta*PI/180));
+	T2=TS*M*sin((-PI/3)*(sector-1) +(theta*PI/180));
+	Tz=TS-T1-T2;
+	switch (sector)
+	{
+	case 1:
+	TIM1->CCR1=(Tz/2 + T1 +T2);
+	TIM1->CCR2=(Tz/2 + T2);
+	TIM1->CCR3=(Tz/2);
+	break;
+
+	case 2:
+	TIM1->CCR1=(Tz/2 +T1);
+	TIM1->CCR2=(Tz/2 + T1 +T2);
+	TIM1->CCR3=(Tz/2);
+	break;
+
+	case 3:
+	TIM1->CCR1=(Tz/2);
+	TIM1->CCR2=(Tz/2 + T1 +T2);
+	TIM1->CCR3=(Tz/2 + T2);
+	break;
+
+	case 4:
+	TIM1->CCR1=(Tz/2);
+	TIM1->CCR2=(Tz/2 +T1);
+	TIM1->CCR3=(Tz/2 + T1 +T2);
+	break;
+
+	case 5:
+	TIM1->CCR1=(Tz/2 + T2);
+	TIM1->CCR2=(Tz/2);
+	TIM1->CCR3=(Tz/2 + T1 +T2);
+	break;
+
+	case 6:
+	TIM1->CCR1=(Tz/2 + T1 +T2);
+	TIM1->CCR2=(Tz/2);
+	TIM1->CCR3=(Tz/2 +T1);
+	break;
+
+	default:
+	break;
+	}
+
+	freq = (ADC1->DR)/50;  											// Read the Data Register
+	M=freq/50.0;
+	if(M>1) M=1;
+	theta+=(freq*360/f);
+	if(theta>=360) theta=0;
 }
 /******************************************/
-/***			DMA INIT				***/
+/***			EXTI0 INTERRUPT			***/
 /******************************************/
-void dma_init(void)
+void EXTI0_IRQHandler(void)
 {
-	  RCC->AHB1ENR |= (1 << 22);									// Enable DMA2 clock
+	GPIOD->ODR ^= (GPIO_ODR_OD15);								// Toggle Leds
+	GPIOD->ODR ^= (GPIO_ODR_OD14);								// Toggle Leds
+	GPIOD->ODR ^= (GPIO_ODR_OD13);								// Toggle Leds
+	GPIOD->ODR ^= (GPIO_ODR_OD12);								// Toggle Leds
 
-	  DMA2_Stream1->CR &= DMA_SxCR_EN;
-	  while(DMA2_Stream1->CR & DMA_SxCR_EN){;}
-	  DMA2_Stream1->CR |=  ( (6<<25)|(1<<14)|(1 << 12)|(1<<8)|(1<<10)|(1<<6) );
 
-	  DMA2_Stream2->CR &= DMA_SxCR_EN;
-	  while(DMA2_Stream2->CR & DMA_SxCR_EN){;}
-	  DMA2_Stream2->CR |=  ( (6<<25)|(1<<14)|(1 << 12)|(1<<8)|(1<<10)|(1<<6) );
-
-	  DMA2_Stream6->CR &= DMA_SxCR_EN;
-	  while(DMA2_Stream6->CR & DMA_SxCR_EN){;}
-	  DMA2_Stream6->CR |=  ( (6<<25)|(1<<14)|(1 << 12)|(1<<8)|(1<<10)|(1<<6) );
-
-	  DMA2_Stream1->NDTR=(uint16_t)360;
-	  DMA2_Stream2->NDTR=(uint16_t)360;
-	  DMA2_Stream6->NDTR=(uint16_t)360;
-
-	  DMA2_Stream1->PAR=(uint32_t)(&TIM1->CCR1);
-	  DMA2_Stream2->PAR=(uint32_t)(&TIM1->CCR2);
-	  DMA2_Stream6->PAR=(uint32_t)(&TIM1->CCR3);
-
-	  DMA2_Stream1->M0AR=(uint32_t)(&u);
-	  DMA2_Stream2->M0AR=(uint32_t)(&v);
-	  DMA2_Stream6->M0AR=(uint32_t)(&w);
-
-	  DMA2_Stream1->CR|=DMA_SxCR_EN;
-	  DMA2_Stream2->CR|=DMA_SxCR_EN;
-	  DMA2_Stream6->CR|=DMA_SxCR_EN;
+	TIM1->BDTR ^= (TIM_BDTR_MOE_Msk);							// Global output toggled for TIM1
+	delay_ms(300);												// Delay to Prevent Button Bounce
+	EXTI->PR |= (1);											// Lower Interrupt flag
 }
