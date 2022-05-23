@@ -142,6 +142,10 @@ void timer1_init(void)
 	TIM1->CCMR1 &= ~(TIM_CCMR1_CC2S);							// TIMER1 CC2S bits cleared for output configuration
 	TIM1->CCMR2 &= ~(TIM_CCMR2_CC3S);							// TIMER1 CC3S bits cleared for output configuration
 
+	// Preload Setup
+	TIM1->CR2 |= 1;												// Capture Compare Preload Enabled
+	TIM1->CCMR1 |= (TIM_CCMR1_OC1PE | TIM_CCMR1_OC2PE);			// Output Compare Preloads are Enabled
+	TIM1->CCMR2 |= (TIM_CCMR2_OC3PE);
 	// Counter Setup
 	TIM1->PSC  = 0; 											// 168MHz 5.95nS
 	TIM1->CNT  = 0;												// Reset Current Counter
@@ -272,9 +276,10 @@ void set_sysclk_to_168(void)
 /******************************************/
 void TIM1_UP_TIM10_IRQHandler(void)
 {
+	TIM1->EGR|=TIM_EGR_COMG;
 	ADC1->CR2 |= (1<<30);  										// start the ADC conversion
 	sector=(theta)/60+1;										// gets Space Vector Sector data from current angle
-	TIM1->SR &=~(TIM_SR_UIF);									// Lower Interrupt flag for next interrupts
+	//TIM1->SR &=~(TIM_SR_UIF);									// Lower Interrupt flag for next interrupts
 	T1=TS*M*sin((PI/3)*(sector) - (theta*PI/180));				// Calculates T1 dwell time
 	T2=TS*M*sin((-PI/3)*(sector-1) +(theta*PI/180));			// Calculates T2 dwell time
 	Tz=TS-T1-T2;												// Calculates Tzero dwell time
