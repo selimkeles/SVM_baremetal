@@ -90,6 +90,16 @@ void gpio_init(void)
 	GPIOE->OTYPER = 0;											// Pin configuration
 	GPIOB->OTYPER = 0;											// Pin configuration
 
+
+	/*
+	* UH->E9
+	* UL->E8
+	* VH->E11
+	* VL->B0
+	* WH->E13
+	* WL->B1
+	*/
+
 	GPIOE->MODER  = ((1<<19)
 					|(1<<17)
 					|(1<<23)
