@@ -8,4 +8,4 @@ main.c:184:6:delay_ms	24	static,ignoring_inline_asm
 main.c:193:6:adc_init	4	static
 main.c:213:6:set_sysclk_to_168	4	static
 main.c:277:6:TIM1_UP_TIM10_IRQHandler	24	static
-main.c:337:6:EXTI0_IRQHandler	8	static
+main.c:338:6:EXTI0_IRQHandler	8	static

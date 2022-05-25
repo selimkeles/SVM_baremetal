@@ -279,7 +279,7 @@ void TIM1_UP_TIM10_IRQHandler(void)
 	TIM1->EGR|=TIM_EGR_COMG;
 	ADC1->CR2 |= (1<<30);  										// start the ADC conversion
 	sector=(theta)/60+1;										// gets Space Vector Sector data from current angle
-	//TIM1->SR &=~(TIM_SR_UIF);									// Lower Interrupt flag for next interrupts
+	TIM1->SR &=~(TIM_SR_UIF);									// Lower Interrupt flag for next interrupts
 	T1=TS*M*sin((PI/3)*(sector) - (theta*PI/180));				// Calculates T1 dwell time
 	T2=TS*M*sin((-PI/3)*(sector-1) +(theta*PI/180));			// Calculates T2 dwell time
 	Tz=TS-T1-T2;												// Calculates Tzero dwell time
@@ -328,6 +328,7 @@ void TIM1_UP_TIM10_IRQHandler(void)
 	freq = (ADC1->DR)/50;  										// Write ADC Value to frequency variable and scale it to max 80Hz
 	M=freq/50.0;												// V/f Control
 	if(M>1) M=1;												// Field Weakening to prevent working on 6 Step PWM mode
+	if(freq<1) freq=1;											// Rotor Lock approximately
 	theta+=(freq*360/f);										// Calculating the next angle for given frequency rate (Open Loop Control)
 	if(theta>=360) theta=0;										// Theta becomes zero every period
 }
