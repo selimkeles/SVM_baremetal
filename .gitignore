@@ -32,7 +32,6 @@ RemoteSystemsTempFiles/
 
 # Core dumps / debug artifacts
 *.stackdump
-core
 
 # OS / editor junk
 Thumbs.db

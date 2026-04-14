@@ -69,6 +69,65 @@ void MX_FREERTOS_Init(void);
   * @brief  The application entry point.
   * @retval int
   */
+int main(void)
+{
+
+  /* USER CODE BEGIN 1 */
+
+  /* USER CODE END 1 */
+
+  /* MCU Configuration--------------------------------------------------------*/
+
+  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+  HAL_Init();
+
+  /* USER CODE BEGIN Init */
+
+  /* USER CODE END Init */
+
+  /* Configure the system clock */
+  SystemClock_Config();
+
+  /* USER CODE BEGIN SysInit */
+
+  /* USER CODE END SysInit */
+
+  /* Initialize all configured peripherals */
+  MX_GPIO_Init();
+  MX_ADC1_Init();
+  MX_TIM1_Init();
+  /* USER CODE BEGIN 2 */
+
+  // Override CubeMX-assigned NVIC priority (5) so the PWM ISR runs above the
+  // FreeRTOS cutoff (configMAX_SYSCALL_INTERRUPT_PRIORITY = 5) and cannot be
+  // preempted by the kernel.
+
+  bsp_adc_init();
+  bsp_pwm_init();
+  inverter_init();
+  bsp_pwm_start();
+
+  /* USER CODE END 2 */
+
+  /* Init scheduler */
+  osKernelInitialize();  /* Call init function for freertos objects (in cmsis_os2.c) */
+  MX_FREERTOS_Init();
+
+  /* Start scheduler */
+  osKernelStart();
+
+  /* We should never get here as control is now taken by the scheduler */
+
+  /* Infinite loop */
+  /* USER CODE BEGIN WHILE */
+  while (1)
+  {
+    /* USER CODE END WHILE */
+
+    /* USER CODE BEGIN 3 */
+  }
+  /* USER CODE END 3 */
+}
 
 /**
   * @brief System Clock Configuration
@@ -117,34 +176,7 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
-int main(void)
-{
-    HAL_Init();
-    SystemClock_Config();
 
-    MX_GPIO_Init();
-    MX_ADC1_Init();
-    MX_TIM1_Init();
-
-    // Override CubeMX-assigned NVIC priority (5) so the PWM ISR runs above the
-    // FreeRTOS cutoff (configMAX_SYSCALL_INTERRUPT_PRIORITY = 5) and cannot be
-    // preempted by the kernel.
-    HAL_NVIC_SetPriority(TIM1_UP_TIM10_IRQn, 2, 0);
-
-    bsp_led_init();
-    bsp_button_init();
-    bsp_adc_init();
-    bsp_pwm_init();
-    inverter_init();
-    bsp_pwm_start();
-
-    osKernelInitialize();
-    MX_FREERTOS_Init();
-    osKernelStart();
-
-    // Unreachable unless the scheduler fails to start.
-    while (1) { }
-}
 /* USER CODE END 4 */
 
 /**
