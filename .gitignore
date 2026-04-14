@@ -1,0 +1,44 @@
+# Build output directories
+Debug/
+Release/
+
+# STM32CubeIDE / Eclipse workspace metadata
+.metadata/
+RemoteSystemsTempFiles/
+.recommenders/
+
+# Compiled object and dependency files
+*.o
+*.d
+*.su
+*.su.json
+*.obj
+
+# Linker output
+*.elf
+*.map
+*.list
+*.hex
+*.bin
+
+# Archives / shared libs
+*.a
+*.lib
+*.so
+*.dll
+
+# Core dumps / debug artifacts
+*.stackdump
+core
+
+# OS / editor junk
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+*.swp
+*.swo
+*~
+
+# VS Code (keep shared settings if you add any; ignore per-user state)
+.vscode/
