@@ -1,15 +1,43 @@
 # SVM_baremetal — Project Context
 
-Open-loop Space Vector PWM (SVPWM) 3-phase inverter for AC motor drive. Final year thesis project. Bare-metal, register-level STM32 code — no HAL.
+Open-loop Space Vector PWM (SVPWM) 3-phase inverter for AC motor drive. Final year thesis project. STM32 HAL + FreeRTOS, with the 10 kHz control ISR using direct register writes for CCRs where HAL overhead matters.
 
 ## Project Layout
 
-Single-file implementation — **all logic lives in [Core/Src/main.c](Core/Src/main.c)**:
+Three-layer split: **App / BSP / Drivers**. CubeMX owns peripheral init via the `.ioc`; our code lives in `App/` and `BSP/`.
 
-- `main.c` — clock setup, GPIO/TIM1/ADC/EXTI init, and the SVPWM ISR (`TIM1_UP_TIM10_IRQHandler`) that computes dwell times and updates CCR registers every PWM cycle
-- `Drivers/MyLib/Inverter.{c,h}` — empty stubs, not used
-- `SVM_baremetal_hardware/` — git submodule with schematic / PCB
-- `Final_Year_Project_Thesis.pdf` — thesis document (LaTeX-authored, has organized section headers — consult for theory, dwell-time derivations, and design rationale)
+```
+Core/
+  Src/  main.c               ← HAL_Init, SystemClock_Config, MX_*_Init, inverter_init, osKernelStart
+        tim.c, adc.c, gpio.c ← CubeMX-generated HAL init (don't edit outside USER CODE blocks)
+        freertos.c           ← CubeMX-generated defaultTask stub
+        stm32f4xx_it.c       ← HAL_TIM_IRQHandler dispatches to callbacks
+        stm32f4xx_hal_msp.c, system_stm32f4xx.c, stm32f4xx_hal_timebase_tim.c
+  Inc/  main.h, tim.h, adc.h, gpio.h, FreeRTOSConfig.h, stm32f4xx_hal_conf.h
+
+BSP/
+  Src/  bsp_pwm.c    ← wraps htim1: set_ccr, enable_output (MOE), trigger_comg
+        bsp_adc.c    ← poll ADC1->DR; start via SWSTART
+        bsp_button.c ← HAL_GPIO_EXTI_Callback → inverter_toggle_enable()
+        bsp_led.c    ← PD12-15 (Discovery board LEDs); self-inits to guarantee mapping
+        bsp_clock.c, bsp_gpio.c ← placeholders (CubeMX owns these)
+  Inc/  bsp_*.h
+
+App/
+  Src/  svpwm.c      ← pure sector/dwell math (sinf), no HW
+        vf_control.c ← freq → M, theta integrator, field-weakening
+        inverter.c   ← glue: ISR entry calls vf_step → svpwm_compute → bsp_pwm_set_ccr;
+                       owns inverter_state, setter API for future USB CLI
+  Inc/  svpwm.h, vf_control.h, inverter.h
+
+SVM_baremetal_hardware/       ← git submodule (schematic / PCB)
+Final_Year_Project_Thesis.pdf ← theory reference (SVPWM math, V/f, design rationale)
+```
+
+**10 kHz ISR path** (TIM1 update → `HAL_TIM_IRQHandler` → `HAL_TIM_PeriodElapsedCallback` branch for TIM1 in `Core/Src/main.c`):
+`bsp_pwm_trigger_comg()` → `bsp_adc_start()` → `inverter_on_pwm_update(bsp_adc_read())`.
+
+TIM1 NVIC priority is overridden to **2** in `main()` (CubeMX defaulted it to 5, which would sit at the FreeRTOS cutoff).
 
 ## Firmware Summary
 
@@ -46,11 +74,12 @@ Post-repair IGBT blow-ups attributed to **Miller-coupled parasitic turn-on** of 
 
 ## Coding Conventions
 
-- Direct CMSIS register access — do not introduce HAL dependencies
+- HAL for peripheral init (via CubeMX `.ioc` regeneration). Direct register access only on the 10 kHz hot path (`TIM1->CCRx`, `ADC1->DR`, `EGR |= COMG`) where HAL overhead matters
 - Keep the ISR lean; it runs at 10 kHz with ~16,800 cycles budget
-- `sin()` (double) is used in the ISR — `sinf()` or a sine lookup table are known optimizations if headroom becomes an issue
-- No dynamic allocation
-- Comments are right-aligned in the existing style; match it when editing `main.c`
+- `sinf()` is used in `App/Src/svpwm.c` (single-precision FPU). A sine LUT is the next optimization if headroom tightens
+- No dynamic allocation on the control path. FreeRTOS heap (8 KB, `heap_4.c`) is for RTOS objects only
+- New app logic → `App/`. New hardware wrappers → `BSP/`. Never add logic to CubeMX-owned files outside `USER CODE` markers
+- `configMAX_SYSCALL_INTERRUPT_PRIORITY = 5`. TIM1 UP at priority 2 (above cutoff, cannot call any `*_FromISR` API). EXTI0 at 5 (may use FromISR)
 
 ## Build
 
