@@ -4,10 +4,10 @@
 // Board LEDs LD3..LD6 on PD3..PD6. Pin init is done by MX_GPIO_Init (CubeMX);
 // this module just maps logical LED names to GPIO pins and provides on/off/toggle.
 static const uint16_t s_led_pins[BSP_LED_COUNT] = {
-    [BSP_LED_GREEN]  = GPIO_PIN_3,
-    [BSP_LED_ORANGE] = GPIO_PIN_4,
-    [BSP_LED_RED]    = GPIO_PIN_5,
-    [BSP_LED_BLUE]   = GPIO_PIN_6,
+    [BSP_LED_GREEN]  = GPIO_PIN_12,
+    [BSP_LED_ORANGE] = GPIO_PIN_13,
+    [BSP_LED_RED]    = GPIO_PIN_14,
+    [BSP_LED_BLUE]   = GPIO_PIN_15,
 };
 
 void bsp_led_init(void)
