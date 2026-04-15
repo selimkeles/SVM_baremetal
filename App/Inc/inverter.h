@@ -5,7 +5,7 @@
 #include <stdint.h>
 
 void inverter_init(void);
-void inverter_on_pwm_update(uint16_t adc_raw);
+void inverter_on_pwm_update(void);
 void inverter_enable(bool enabled);
 void inverter_toggle_enable(void);
 bool inverter_is_enabled(void);

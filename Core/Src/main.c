@@ -21,13 +21,13 @@
 #include "cmsis_os.h"
 #include "adc.h"
 #include "tim.h"
+#include "usb_device.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "inverter.h"
 #include "bsp_pwm.h"
-#include "bsp_adc.h"
 #include "bsp_button.h"
 #include "bsp_led.h"
 /* USER CODE END Includes */
@@ -98,11 +98,14 @@ int main(void)
   MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
 
-  // Override CubeMX-assigned NVIC priority (5) so the PWM ISR runs above the
-  // FreeRTOS cutoff (configMAX_SYSCALL_INTERRUPT_PRIORITY = 5) and cannot be
-  // preempted by the kernel.
+  // TIM1 UP runs at priority 2 — above the FreeRTOS syscall cutoff (5) so
+  // the 10 kHz PWM ISR cannot be preempted by the kernel.
+  HAL_NVIC_SetPriority(TIM1_UP_TIM10_IRQn, 2, 0);
 
-  bsp_adc_init();
+  // Belt-and-braces: ensure OTG_FS IRQ stays below the FreeRTOS syscall
+  // cutoff so CDC_Receive_FS can legally call xStreamBufferSendFromISR.
+  HAL_NVIC_SetPriority(OTG_FS_IRQn, 6, 0);
+
   bsp_pwm_init();
   inverter_init();
   bsp_pwm_start();
@@ -146,12 +149,11 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
-  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.HSEState = RCC_HSE_BYPASS;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
-  RCC_OscInitStruct.PLL.PLLM = 8;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+  RCC_OscInitStruct.PLL.PLLM = 4;
   RCC_OscInitStruct.PLL.PLLN = 168;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
   RCC_OscInitStruct.PLL.PLLQ = 7;
@@ -200,8 +202,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   else if (htim->Instance == TIM1)
   {
     bsp_pwm_trigger_comg();
-    bsp_adc_start();
-    inverter_on_pwm_update(bsp_adc_read());
+    inverter_on_pwm_update();
   }
   /* USER CODE END Callback 1 */
 }

@@ -10,6 +10,6 @@ typedef struct {
 } vf_state_t;
 
 void vf_state_init(vf_state_t *s);
-void vf_step(vf_state_t *s, uint16_t adc_raw, float carrier_hz);
+void vf_step(vf_state_t *s, int freq_hz, float carrier_hz);
 
 #endif
